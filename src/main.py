@@ -1,16 +1,34 @@
-#%%
-import pandas as pd
-
-# you should use dotenv if you manage tokens, passwords, api keys, private infos etc
-# look at the .env.example file and delete the .example extension
-from dotenv import load_dotenv
+"""
+MoneyBuddy API - Simple hackathon-ready budget management API
+"""
 import os
+import sys
+from pathlib import Path
+
+# Add src directory to Python path for imports
+current_dir = Path(__file__).parent
+sys.path.insert(0, str(current_dir))
+
+from dotenv import load_dotenv
+from utils import create_app
+
+# Load environment variables
 load_dotenv()
-print(os.getenv("SUPER_SECRET_KEY"))
 
+# Create Flask app
+app = create_app()
 
-# %% 
-# you can use a utils file to store functions and main (this) to call them
-from utils import change_my_name # import the function from utils.py
-change_my_name(10) # call the function
-# %%
+if __name__ == '__main__':
+    # Simple configuration
+    port = int(os.getenv('PORT', 420))
+    debug_mode = os.getenv('FLASK_ENV') == 'development'
+    
+    print("🚀 MoneyBuddy API starting...")
+    print(f"   Port: {port}")
+    print(f"   Debug: {debug_mode}")
+    
+    app.run(
+        host='0.0.0.0',
+        port=port,
+        debug=debug_mode
+    )
