@@ -31,6 +31,7 @@ class Transaction(db.Model):
     direction = db.Column(db.String(20), nullable=False)  # debit/credit or IN/OUT
     amount = db.Column(db.Float, nullable=False)
     currency = db.Column(db.String(10), nullable=False)
+    category = db.Column(db.String(100))  # New field for category
     
     # Merchant info
     merchant_name = db.Column(db.String(100))
@@ -38,6 +39,7 @@ class Transaction(db.Model):
     merchant_phone = db.Column(db.String(50))
     merchant_address = db.Column(db.Text)
     merchant_iban = db.Column(db.String(50))
+    merchant_familiar_name = db.Column(db.String(100))  # New field for familiar name
     
     # Card and payment
     card_id_masked = db.Column(db.String(50))
