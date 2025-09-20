@@ -3,6 +3,9 @@ import pandas as pd
 import sqlite3
 import json
 
+from datetime import datetime
+
+#%%
 # Read Excel file
 df = pd.read_excel('/Users/alessiogandelli/dev/starthacktoursept25/moneybuddy-backend/data/transactions.xlsx', sheet_name='TRX Data')
 
@@ -86,5 +89,34 @@ df_final['updated_at'] = current_time
 df_final.to_sql('transactions', conn, if_exists='append', index=False)
 
 print(f"Imported {len(df_final)} transactions to database")
+conn.close()
+# %%
+
+# set created_at and updated_at to now to all the null values 
+import sqlite3
+from datetime import datetime
+conn = sqlite3.connect('/Users/alessiogandelli/dev/starthacktoursept25/moneybuddy-backend/instance/transactions.db')
+current_time = datetime.now().isoformat()
+conn.execute(f"UPDATE transactions SET created_at = '{current_time}' WHERE created_at IS NULL")
+conn.execute(f"UPDATE transactions SET updated_at = '{current_time}' WHERE updated_at IS NULL")
+conn.commit()
+conn.close()
+# %%
+
+# change all the credit to debit in the direction 
+conn = sqlite3.connect('/Users/alessiogandelli/dev/starthacktoursept25/moneybuddy-backend/instance/transactions.db')
+conn.execute("UPDATE transactions SET direction = 'OUT' WHERE true")
+conn.commit()
+conn.close()
+
+
+
+# %%
+# set updated at to now 
+
+conn = sqlite3.connect('/Users/alessiogandelli/dev/starthacktoursept25/moneybuddy-backend/instance/transactions.db')
+current_time = datetime.now().isoformat()
+conn.execute(f"UPDATE transactions SET updated_at = '{current_time}' WHERE updated_at IS NULL")
+conn.commit()
 conn.close()
 # %%

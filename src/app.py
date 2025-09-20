@@ -20,11 +20,13 @@ db.init_app(app)
 # THE ONLY ENDPOINT YOU NEED
 @app.route('/transaction', methods=['GET', 'POST'])
 def transaction():
+    # get all transactions
     if request.method == 'GET':
         # Get all transactions
         transactions = Transaction.query.all()
         return jsonify([t.to_dict() for t in transactions])
     
+    # add a new transaction
     elif request.method == 'POST':
         # Add new transaction
         data = request.get_json()
@@ -80,6 +82,26 @@ def transaction():
         except Exception as e:
             db.session.rollback()
             return jsonify({'error': str(e)}), 500
+
+# DELETE specific transaction by ID
+@app.route('/transaction/<int:transaction_id>', methods=['DELETE'])
+def delete_transaction(transaction_id):
+    try:
+        # Find the transaction by ID
+        transaction = Transaction.query.get(transaction_id)
+        
+        if not transaction:
+            return jsonify({'error': 'Transaction not found'}), 404
+        
+        # Delete the transaction
+        db.session.delete(transaction)
+        db.session.commit()
+        
+        return jsonify({'message': 'Transaction deleted successfully'}), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
 
 # Create database tables
 with app.app_context():
