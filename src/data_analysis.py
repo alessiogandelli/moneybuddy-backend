@@ -1,156 +1,129 @@
 #%%
-import sys
-import warnings
+import sqlite3
+import pandas as pd
+import random
+from datetime import datetime, timedelta
+import numpy as np
+import re
+import json
+import requests
+from typing import Dict, List, Tuple, Optional
+from collections import Counter
+import uuid
 
-# Handle numpy compatibility issues
-try:
-    import pandas as pd
-    import numpy as np
-except ImportError as e:
-    print(f"Error importing core packages: {e}")
-    print("Try: pip install --upgrade pandas numpy")
-    sys.exit(1)
+# Connect to the transaction database
+conn = sqlite3.connect('/Users/alessiogandelli/dev/starthacktoursept25/moneybuddy-backend/instance/transactions.db')
 
-# Handle visualization packages with fallbacks
-PLOTTING_AVAILABLE = True
-try:
-    import matplotlib.pyplot as plt
-    import seaborn as sns
-    # Set a safe backend for matplotlib
-    plt.switch_backend('Agg')
-except ImportError as e:
-    print(f"Warning: Visualization packages not available: {e}")
-    PLOTTING_AVAILABLE = False
-except Exception as e:
-    print(f"Warning: Matplotlib backend issue: {e}")
-    PLOTTING_AVAILABLE = False
 
-from datetime import datetime
+df = pd.read_sql('SELECT * FROM transactions', conn)
 
-def load_transaction_data(file_path):
-    """Load transaction data from CSV file"""
-    try:
-        df = pd.read_csv(file_path)
-        return df
-    except FileNotFoundError:
-        print(f"File {file_path} not found")
-        return None
 
-def perform_eda(df):
-    """Perform Exploratory Data Analysis on transaction data"""
+
+# Close the connection
+conn.close()
+# %%
+
+# %%
+def generate_synthetic_user_id():
+    """Generate a random user ID"""
+    return str(uuid.uuid4())
+
+def generate_synthetic_transactions(original_df: pd.DataFrame, num_users: int = 10, total_transactions: int = 1200) -> pd.DataFrame:
+    """
+    Generate synthetic transactions based on existing data patterns
+    """
+    synthetic_data = []
+    user_ids = [generate_synthetic_user_id() for _ in range(num_users)]
+    customer_names = ["franco", "peppe", "gianni", "luigi", "mario", "pino", "spongebob", "skuz", "dema", "gandi"]
     
-    print("=== TRANSACTION DATA EDA ===\n")
+    # Create user mapping
+    user_customer_mapping = dict(zip(user_ids, customer_names))
     
-    # Basic info
-    print("Dataset Shape:", df.shape)
-    print("\nColumn Info:")
-    print(df.info())
+    # Calculate transactions per month (should be 100)
+    transactions_per_month = total_transactions // 12
     
-    print("\nFirst 5 rows:")
-    print(df.head())
+    for month_offset in range(12):  # Last 12 months
+        for _ in range(transactions_per_month):
+            # Select a random row from original data as template
+            template_row = original_df.sample(n=1).iloc[0]
+            
+            # Generate random date within the month
+            base_date = datetime.now() - timedelta(days=30 * (11 - month_offset))
+            random_day = random.randint(1, 28)  # Safe day range for all months
+            transaction_date = base_date.replace(day=random_day)
+            
+            # Create new transaction with random user
+            new_transaction = template_row.copy()
+            selected_user_id = random.choice(user_ids)
+            new_transaction['user_id'] = selected_user_id
+            
+            # Set customer_name based on user_id
+            if 'customer_name' in original_df.columns:
+                new_transaction['customer_name'] = user_customer_mapping[selected_user_id]
+            
+            # Update date fields if they exist
+            if 'date' in original_df.columns:
+                new_transaction['date'] = transaction_date.strftime('%Y-%m-%d')
+            if 'timestamp' in original_df.columns:
+                new_transaction['timestamp'] = transaction_date.isoformat()
+            
+            # Add some variance to amount if it exists
+            if 'amount' in original_df.columns:
+                variance = random.uniform(0.8, 1.2)  # ±20% variance
+                new_transaction['amount'] = float(template_row['amount']) * variance
+            
+            synthetic_data.append(new_transaction)
     
-    print("\nBasic Statistics:")
-    print(df.describe())
+    return pd.DataFrame(synthetic_data)
+
+# Generate synthetic data
+print("Generating synthetic transactions...")
+synthetic_df = generate_synthetic_transactions(df, num_users=10, total_transactions=1200)
+
+# Create new database with synthetic data
+synthetic_conn = sqlite3.connect('/Users/alessiogandelli/dev/starthacktoursept25/moneybuddy-backend/instance/synthetic_transactions.db')
+
+# Write synthetic data to new database
+synthetic_df.to_sql('transactions', synthetic_conn, if_exists='replace', index=False)
+
+print(f"Created synthetic database with {len(synthetic_df)} transactions")
+print(f"Number of unique users: {synthetic_df['user_id'].nunique()}")
+print(f"Date range: {synthetic_df.get('date', pd.Series()).min()} to {synthetic_df.get('date', pd.Series()).max()}")
+
+# Close the connection
+synthetic_conn.close()
+# Update dates to be from Sept 21, 2024 to Sept 21, 2025
+def update_dates_in_synthetic_db():
+    """Update dates in synthetic database to range from Sept 21, 2024 to Sept 21, 2025"""
+    conn = sqlite3.connect('/Users/alessiogandelli/dev/starthacktoursept25/moneybuddy-backend/instance/synthetic_transactions.db')
     
-    # Check for missing values
-    print("\nMissing Values:")
-    print(df.isnull().sum())
+    # Read the synthetic data
+    df = pd.read_sql('SELECT * FROM transactions', conn)
     
-    # If amount column exists, analyze it
-    amount_cols = [col for col in df.columns if 'amount' in col.lower()]
-    if amount_cols:
-        amount_col = amount_cols[0]
-        print(f"\nAmount Analysis ({amount_col}):")
-        print(f"Total transactions: {len(df)}")
-        print(f"Total amount: ${df[amount_col].sum():,.2f}")
-        print(f"Average amount: ${df[amount_col].mean():.2f}")
-        print(f"Median amount: ${df[amount_col].median():.2f}")
+    # Generate new dates within the specified range
+    start_date = datetime(2024, 9, 21)
+    end_date = datetime(2025, 9, 21)
+    date_range = (end_date - start_date).days
+    
+    for idx in range(len(df)):
+        # Generate random date within range
+        random_days = random.randint(0, date_range)
+        new_date = start_date + timedelta(days=random_days)
         
-        # Plot amount distribution only if plotting is available
-        if PLOTTING_AVAILABLE:
-            try:
-                plt.figure(figsize=(12, 4))
-                
-                plt.subplot(1, 2, 1)
-                plt.hist(df[amount_col], bins=50, alpha=0.7)
-                plt.title('Amount Distribution')
-                plt.xlabel('Amount')
-                plt.ylabel('Frequency')
-                
-                plt.subplot(1, 2, 2)
-                plt.boxplot(df[amount_col])
-                plt.title('Amount Box Plot')
-                plt.ylabel('Amount')
-                
-                plt.tight_layout()
-                plt.show()
-            except Exception as e:
-                print(f"Could not generate amount plots: {e}")
-        else:
-            print("Visualization not available - skipping amount plots")
+        # Update date fields
+        if 'date' in df.columns:
+            df.loc[idx, 'date'] = new_date.strftime('%Y-%m-%d')
+        if 'timestamp' in df.columns:
+            df.loc[idx, 'timestamp'] = new_date.isoformat()
     
-    # If category column exists, analyze it
-    category_cols = [col for col in df.columns if 'category' in col.lower()]
-    if category_cols:
-        category_col = category_cols[0]
-        print(f"\nCategory Analysis ({category_col}):")
-        category_counts = df[category_col].value_counts()
-        print(category_counts)
-        
-        # Plot category distribution only if plotting is available
-        if PLOTTING_AVAILABLE:
-            try:
-                plt.figure(figsize=(10, 6))
-                category_counts.plot(kind='bar')
-                plt.title('Transaction Categories')
-                plt.xlabel('Category')
-                plt.ylabel('Count')
-                plt.xticks(rotation=45)
-                plt.tight_layout()
-                plt.show()
-            except Exception as e:
-                print(f"Could not generate category plot: {e}")
-        else:
-            print("Visualization not available - skipping category plot")
+    # Write updated data back to database
+    df.to_sql('transactions', conn, if_exists='replace', index=False)
     
-    # If date column exists, analyze temporal patterns
-    date_cols = [col for col in df.columns if 'date' in col.lower() or 'time' in col.lower()]
-    if date_cols:
-        date_col = date_cols[0]
-        try:
-            df[date_col] = pd.to_datetime(df[date_col])
-            print(f"\nTemporal Analysis ({date_col}):")
-            print(f"Date range: {df[date_col].min()} to {df[date_col].max()}")
-            
-            # Monthly transaction volume
-            monthly_counts = df.set_index(date_col).resample('M').size()
-            
-            if PLOTTING_AVAILABLE:
-                try:
-                    plt.figure(figsize=(12, 4))
-                    monthly_counts.plot(kind='line', marker='o')
-                    plt.title('Monthly Transaction Volume')
-                    plt.xlabel('Month')
-                    plt.ylabel('Number of Transactions')
-                    plt.xticks(rotation=45)
-                    plt.tight_layout()
-                    plt.show()
-                except Exception as e:
-                    print(f"Could not generate temporal plot: {e}")
-            else:
-                print("Visualization not available - showing monthly counts:")
-                print(monthly_counts)
-            
-        except Exception as e:
-            print(f"Could not parse {date_col} as datetime: {e}")
+    print(f"Updated dates to range from {df.get('date', pd.Series()).min()} to {df.get('date', pd.Series()).max()}")
+    
+    conn.close()
 
-if __name__ == "__main__":
-    # Example usage - adjust file path as needed
-    file_path = "transactions.csv"  # Update with your actual file path
-    
-    df = load_transaction_data(file_path)
-    if df is not None:
-        perform_eda(df)
-    else:
-        print("Please provide a valid transaction data file")
+# Update the dates
+update_dates_in_synthetic_db()
+
 # %%
